@@ -1,14 +1,25 @@
 local file = require("libs.file")
 local copy = require("libs.copy")
+local paste = require("libs.paste")
+local qr = require("libs.qr")
+local submit2 = false
 local filepath = nil
 
-function love.load(args)
+function love.load()
     button = {
         width = 125,
         height = 50,
         color = {144 / 255, 213 / 255, 255 / 255},
         round = 5,
         text = "Submit"
+    }
+
+    pasteBtn = {
+        width = 50,
+        height = 50,
+        color = {128 / 255, 128 / 255, 128 / 255},
+        round = 3,
+        text = "Paste"
     }
 
     textinput = {
@@ -22,6 +33,8 @@ function love.load(args)
     button.y = love.graphics.getHeight() / 2 - (button.height / 2) + button.height
     textinput.x = love.graphics.getWidth() / 2 - (textinput.width / 2)
     textinput.y = love.graphics.getHeight() / 2 - (textinput.height / 2) - textinput.height + 25
+    pasteBtn.x = textinput.x + (pasteBtn.width / 2) + textinput.width
+    pasteBtn.y = textinput.y
     font = love.graphics.newFont(30)
     rtext = ""
     isFocused = false
@@ -36,6 +49,15 @@ function drawButton()
     love.graphics.print(button.text, button.x + (25 / 1.5), button.y + (25 / 3))
 end
 
+function drawPasteBtn()
+    love.graphics.setColor(pasteBtn.color)
+    love.graphics.rectangle("fill", pasteBtn.x, pasteBtn.y, pasteBtn.width, pasteBtn.height, pasteBtn.round)
+    local lfont = love.graphics.newFont(17)
+    love.graphics.setFont(lfont)
+    love.graphics.setColor(1,1,1)
+    love.graphics.print(pasteBtn.text, pasteBtn.x + (5 / 2), pasteBtn.y * 1.05)
+end
+
 function drawTextInput()
     love.graphics.setColor(textinput.color)
     love.graphics.rectangle("fill", textinput.x, textinput.y, textinput.width, textinput.height, textinput.round)
@@ -44,9 +66,8 @@ function drawTextInput()
     local lfont = love.graphics.newFont(16)
     love.graphics.setFont(lfont)
     
-    -- Clip the text to fit within the textinput width
     local textToDraw = textinput.text
-    local maxWidth = textinput.width - 10 -- Add padding inside the text box
+    local maxWidth = textinput.width - 10
     local clippedText = lfont:getWidth(textToDraw) > maxWidth and textToDraw:sub(1, math.floor(maxWidth / lfont:getWidth("a"))) .. "…" or textToDraw
     
     love.graphics.printf(clippedText, textinput.x + 5, textinput.y + (textinput.height - lfont:getHeight()) / 2, maxWidth, "left")
@@ -59,8 +80,15 @@ end
 
 function submit()
     love.graphics.setColor(1,1,1)
-    rtext = "Copied to clipboard!"
-    love.graphics.print(rtext, love.graphics.getWidth() / 2.5, 0 + 40)
+    local rtext = "Copied to clipboard!"
+    filepath = textinput.text
+    if file.exists(filepath) then
+        copyToClipboard(read_qr(filepath))
+        love.graphics.print(rtext, love.graphics.getWidth() / 2.5, 0 + 40)
+    else
+        rtext = "File does not exist"
+        love.graphics.print(rtext, love.graphics.getWidth() / 2.5, 0 + 40)
+    end
 end
 
 function hover(x,y,width,height)
@@ -78,6 +106,7 @@ function love.mousepressed(x,y,btn)
     if btn == 1 then
         if hover(button.x, button.y, button.width, button.height) then
             print("Button Clicked!")
+            submit2 = true
         end
     end
 
@@ -89,6 +118,12 @@ function love.mousepressed(x,y,btn)
             isFocused = false
         end
     end
+
+    if btn == 1 then
+        if hover(pasteBtn.x, pasteBtn.y, pasteBtn.width, pasteBtn.height) then
+            textinput.text = pasteFromClipboard()
+        end
+    end
 end
 
 function love.keypressed(k, scancode, isrepeat)
@@ -96,47 +131,34 @@ function love.keypressed(k, scancode, isrepeat)
         love.event.quit()
     end
 
-    -- Toggle CapsLock state when CapsLock key is pressed
     if k == "capslock" then
         capsLock = not capsLock
-        return  -- Prevent adding "capslock" to the text input
+        return
     end
 
-    -- Track Shift key state when Shift key is pressed
     if k == "lshift" or k == "rshift" then
         shiftPressed = true
-        return  -- Prevent adding "shift" to the text input
+        return
     end
-
     if isFocused then
-        -- Handle text input
         if k == "backspace" then
-            -- Remove the last character
             textinput.text = textinput.text:sub(1, -2)
-        elseif k == "return" then
-            -- Optionally handle submission of the input (e.g., copy to clipboard)
-            submit()
         elseif k == "space" then
-            -- Add a space character
             textinput.text = textinput.text .. " "
         else
-            -- Handle character input (only modify the behavior if Shift or CapsLock is pressed)
             local char = k
 
-            -- If Shift is pressed or CapsLock is active, make the character uppercase
             if shiftPressed or capsLock then
                 char = char:upper()
             else
                 char = char:lower()
             end
 
-            -- Append the character to the text input
             textinput.text = textinput.text .. char
         end
     end
 end
 
--- Handle when Shift key is released
 function love.keyreleased(k)
     if k == "lshift" or k == "rshift" then
         shiftPressed = false
@@ -152,4 +174,8 @@ function love.draw()
     love.graphics.print("Qr Code Reader", love.graphics.getWidth() / 2 / 1.4, 0 + (love.graphics.getHeight() / 3.2))
     drawButton()
     drawTextInput()
+    drawPasteBtn()
+    if submit2 then
+        submit()
+    end
 end
